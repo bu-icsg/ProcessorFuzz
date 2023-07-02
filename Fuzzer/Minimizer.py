@@ -40,7 +40,7 @@ def Minimize(dut, toplevel,
         (sim_input, data, assert_intr) = mutator.read_siminput(in_dir + '/' + siName)
 
         if debug:
-            print('[ProcessorFuzz] Original Instructions')
+            print('[DifuzzRTl] Original Instructions')
             for inst, INT in zip(sim_input.get_insts(), sim_input.ints + [0]):
                 print('{:<50}{:04b}'.format(inst, INT))
 

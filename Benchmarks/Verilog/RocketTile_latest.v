@@ -99,6 +99,7 @@ module RocketTile(
 
   reg debug_print;
   string trace_dir;
+  string test_dir;
   reg trace_en;
   integer fd;
   integer iteration;
@@ -106,9 +107,11 @@ module RocketTile(
   wire [63:0] mstatus_wire;
 
   initial begin
+    test_dir = "/projectnb2/risc-v/chath/difuzzrtl/Fuzzer/17output/tests/";
     iteration = 0;
     if (!$value$plusargs("DEBUG=%d", debug_print)) begin
       debug_print = 0;
+      //clock_count = 0;
     end
     if (!$value$plusargs("TRACE=%s", trace_dir)) begin
       trace_en = 0;
@@ -122,10 +125,13 @@ module RocketTile(
 
 
 `ifndef SYNTHESIS
+//integer x;
   always@(posedge eos) begin //chath: closing the file using the end of sim flag
     if (trace_en) begin
       if (fd!=32'd0) begin
+	//for (int x = 0; x < 10 ; x++)begin
         $fflush(fd);
+        $display("FLUSH CALLED");
  	$fclose(fd);
         eos_hs = 1'b1;
       end
@@ -137,12 +143,15 @@ module RocketTile(
       if (fd!=32'd0) begin
         $fflush(fd);
         $fclose(fd);
+        $display("FLUSH CALLED");
       end
       eos_hs = 1'b0;
       iter.itoa(iteration);
-      //$display("TRACE enabled - %s", {trace_dir, "rtl_", iter,".log"});
+      $display("TRACE enabled - %s", {trace_dir, "rtl_", iter,".log"});
       fd = $fopen({trace_dir, "rtl_", iter,".log"},"w");
       $fwrite(fd, "HartID mode PC INSTR WDATA COV\n");
+      //sf = $fopen({test_dir,".input_0_",iter,".symbols_sub"}, "r");
+      //init_queue(sf, sym_addrs_q);
       iteration = iteration + 1;
     end
   end
@@ -158,9 +167,6 @@ module RocketTile(
     if (trace_en) begin
 
       if (core.coreMonitorBundle_valid & ~core.reset) begin
-      //if (frontend.icache_io_resp_bits_ae) begin
-      //    $fwrite(fd,"PMP check failed - load access fault\n");
-      //end
         $fwrite(fd, "%d %d 0x%x ", core.io_hartid, core.csr_io_status_prv, core.csr_io_trace_0_iaddr);
         $fwrite(fd,"0x%x 0x%x", core.csr_io_trace_0_insn, core.coreMonitorBundle_wrenx ? core.rf_wdata : ( (core._GEN_262 || core.wb_ctrl_wfd) ? 64'hdeadbeef : 64'h0)); // @[core.scala 1258:17]
 	$fwrite(fd," %x", mstatus_wire);
@@ -173,9 +179,6 @@ module RocketTile(
 	$fwrite(fd," %d\n", io_covSum);
       end
       else if (core.csr_io_trace_0_exception) begin
-      //if (frontend.icache_io_resp_bits_ae) begin
-      //    $fwrite(fd,"PMP check failed - load access fault\n");
-      //end
         $fwrite(fd, "%d %d 0x%x ", core.io_hartid, core.csr_io_status_prv, core.csr_io_trace_0_iaddr);
         $fwrite(fd,"0x%x 0x%x", core.csr_io_trace_0_insn, core.coreMonitorBundle_wrenx ? core.rf_wdata : 64'h0);
 	$fwrite(fd," %x", mstatus_wire);

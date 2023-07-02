@@ -2,7 +2,6 @@ import os
 import subprocess
 import shutil
 import random
-from shutil import copyfile
 
 from ISASim.host import isaInput
 from RTLSim.host import rtlInput
@@ -15,6 +14,8 @@ class rvPreProcessor():
         self.template = template
         self.base = out_base
         self.proc_num = proc_num
+        self.bp_en = False
+        self.bp_root = ''
         self.er_num = 0
         self.cc_args = [ cc, '-march=rv64g', '-mabi=lp64', '-static', '-mcmodel=medany',
                          '-fvisibility=hidden', '-nostdlib', '-nostartfiles',
@@ -25,7 +26,6 @@ class rvPreProcessor():
         self.elf2hex_args = [ elf2hex, '--bit-width', '64', '--input' ]
 
     def get_symbols(self, elf_name, sym_name):
-        # symbol_file = self.base + '/.input.symbols'
         fd = open(sym_name, 'w')
         subprocess.call([ 'nm', elf_name], stdout=fd )
         fd.close()
@@ -55,7 +55,7 @@ class rvPreProcessor():
         fd.write('{:016x}:{:04b}\n'.format(epc, val))
         fd.close()
 
-    def process(self, sim_input: simInput, data: list, intr: bool, it, run_elf, num_data_sections=6):
+    def process(self, sim_input: simInput, data: list, intr: bool, it, num_data_sections=6):
         section_size = len(data) // num_data_sections
 
         assert data, 'Empty data can not be processed'
@@ -116,10 +116,6 @@ class rvPreProcessor():
 
             if '_fuzz_suffix:' in line:
                 for inst in suffix_insts:
-                    a=random.randint(0,7) #this is for rounding illegal mode
-                    #print(inst)
-                    if "fnmadd.s" in inst and a == 6: #add fnmadd with illegal frm field 
-                        assembly.append(".word 0xa106e5cf" + ';\n')
                     assembly.append(inst + ';\n')
 
             for n in range(num_data_sections):
@@ -142,20 +138,20 @@ class rvPreProcessor():
 
         cc_args = self.cc_args + extra_args + [ asm_name, '-o', elf_name ]
 
+        if self.bp_en:
+            cc_args = cc_args + ['-DBP_EN', '-I'+self.bp_root+'/sdk/include/']
+            idx = cc_args.index('-T') + 1
+            cc_args[idx] = self.bp_root+'/sdk/linker/riscv.ld' #Replacing the linker script
+            #cc_args[0] = 'riscv64-unknown-elf-dramfs-gcc' #Replacing the compiler
 
         cc_ret = -1
-        if run_elf:
-            copyfile(run_elf, elf_name)
-            cc_ret = 0
-
-        while True and run_elf==None:
+        while True:
             cc_ret = subprocess.call(cc_args)
             # if cc_ret == -9: cc process is killed by OS due to memory usage
             if cc_ret != -9: break
 
         if cc_ret == 0:
-            if run_elf==None:
-                subprocess.call(cc_args)
+            subprocess.call(cc_args)
 
             elf2hex_args = self.elf2hex_args + [ elf_name, '--output', hex_name]
             subprocess.call(elf2hex_args)

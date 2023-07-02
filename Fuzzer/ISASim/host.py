@@ -27,5 +27,4 @@ class rvISAhost():
         args = [ self.spike ] + ["-l", "--log="+log, "--log-commits"] + self.spike_args + intr + \
             [ '+signature={}'.format(self.isa_sigfile), binary ] 
         self.debug_print('[ISAHost] Start ISA simulation')
-        #print(args)
         return subprocess.call(args)

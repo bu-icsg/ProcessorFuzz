@@ -2,7 +2,7 @@ import os
 import random
 from copy import deepcopy
 
-from inst_generator import Word, rvInstGenerator, PREFIX, MAIN, SUFFIX
+from inst_generator import Word, rvInstGenerator, PREFIX, MAIN, SUFFIX, NONE, CF_J, CF_BR, CF_RET, MEM_R, MEM_W, CSR
 
 """ Mutation phases """
 GENERATION = 0
@@ -35,13 +35,13 @@ class simInput():
         self.data_seed = data_seed
         self.template = template
         self.it = 0
-        self.name_suffix = '' 
+        self.name_suffix = ''
+        self.mut_labels = [] 
 
     def save(self, name, data=[]):
         prefix_insts = self.get_prefix()
         insts = self.get_insts()
         suffix_insts = self.get_suffix()
-
         fd = open(name, 'w')
         fd.write('{}\n\n'.format(templates[self.template]))
 
@@ -61,6 +61,9 @@ class simInput():
 
         fd.close()
 
+    def get_mut_labels(self):
+        return self.mut_labels
+    
     def get_seed(self):
         return self.data_seed
 
@@ -354,6 +357,71 @@ class rvMutator():
         words = self.reset_labels(words, part)
 
         return words
+    
+    
+    def mutate_words_finer(self, seed_words, part, max_num, mut_labels):
+        words = []
+        regular = True
+        print("Phase:" + part)
+        if  mut_labels and self.phase == MUTATION:
+            if part == MAIN:
+                print(f"Mutate labels with append: {mut_labels}")
+            regular = False
+        else:
+            regular = True  
+            #print("Regular") 
+                      
+        
+        for word in seed_words:
+            rand = random.random()
+            if regular: #regular algo if no mutation label
+                if rand < 0.5:
+                    words.append(word)
+                elif rand < 0.75:
+                    words.append(word)
+                    new_word = self.inst_generator.get_word(part)
+                    words.append(new_word)
+            else: #if mutation label
+                if  "_l" + str(word.get_label()) in mut_labels: #_l is MAIN
+                        print("Found label: " + str(word.get_label()))
+                        #is it Change of Flow Word?
+                        cfi_or_etype = False
+                        if word.tpe in [CF_RET,CF_J,CF_BR] or word.insts in ["ebreak", "ecall"]:
+                            cfi_or_etype = True
+                        print("CFI or Etype?:" + str(cfi_or_etype))
+
+                        new_word_num = random.randint(5, 10)
+                        if (not cfi_or_etype): #Prepend non-cfi instruction
+                            print("Prepend non-cfi words:" + str(new_word_num))
+                            while new_word_num !=0: 
+                                new_word = self.inst_generator.get_word(part)
+                                #print(new_word.tpe)
+                                if new_word.tpe in [CF_RET,CF_J,CF_BR] or "ebreak" in new_word.insts or "ecall" in new_word.insts: 
+                                    continue
+                                else:
+                                #    print(new_word.insts)
+                                    words.append(new_word)
+                                    new_word_num -= 1
+                            words.append(word)
+                        new_word_num = random.randint(5, 10)
+                        print("Append words:" + str(new_word_num))
+                        while new_word_num !=0: 
+                            new_word = self.inst_generator.get_word(part)
+                            #print(new_word.tpe)
+                            if new_word.tpe in [CF_RET,CF_J,CF_BR] or new_word.insts in ["ebreak", "ecall"]: 
+                                continue
+                            else:
+                            #    print(new_word.insts)
+                                words.append(new_word)
+                                new_word_num -= 1
+                        if(cfi_or_etype): #add cfi instruction after
+                            words.append(word)
+                else:
+                    words.append(word)
+        words = words[0:max_num]
+        words = self.reset_labels(words, part)
+
+        return words
 
     def get(self, it, assert_intr=False):
         i_len = 0
@@ -361,6 +429,7 @@ class rvMutator():
         words = []
         suffix = []
         name_suffix = ''
+        mut_labels = []
         self.inst_generator.reset()
 
         data_seed = -1
@@ -385,6 +454,9 @@ class rvMutator():
                 data_seed = seed_si.get_seed()
                 template = seed_si.get_template()
                 name_suffix = '_mut_'+str(seed_si.it)
+                mut_labels = seed_si.get_mut_labels()
+                print("Random choice: " + str(seed_si.it))
+                print(f"Its mutation labels: {mut_labels}")
                 #base = seed_si.it
             else:
                 seed_words = []
@@ -407,9 +479,18 @@ class rvMutator():
 
                 name_suffix = '_mer_' + str(seed_si1.it) + '_' + str(seed_si2.it)
 
-            prefix = self.mutate_words(seed_prefix, PREFIX, self.num_prefix)
-            words = self.mutate_words(seed_words, MAIN, self.max_nWords)
-            suffix = self.mutate_words(seed_suffix, SUFFIX, self.num_suffix)
+            mutate_finer_en = os.environ['MUTATE_FINER'] == '1'
+            
+            if not mutate_finer_en: #Baseline Mutations
+                print("Baseline Mutation Strategy")
+                prefix = self.mutate_words(seed_prefix, PREFIX, self.num_prefix)
+                words = self.mutate_words(seed_words, MAIN, self.max_nWords)
+                suffix = self.mutate_words(seed_suffix, SUFFIX, self.num_suffix)
+            else:
+                print("Finer-granular Mutation Strategy")
+                prefix = self.mutate_words_finer(seed_prefix, PREFIX, self.num_prefix, mut_labels)
+                words = self.mutate_words_finer(seed_words, MAIN, self.max_nWords, mut_labels)
+                suffix = self.mutate_words_finer(seed_suffix, SUFFIX, self.num_suffix, mut_labels)
 
         for word in prefix:
             self.inst_generator.populate_word(word, len(prefix), PREFIX)
@@ -435,7 +516,6 @@ class rvMutator():
 
         if template == -1:
             template = random.randint(0, V_U)
-        #print(words)
         sim_input = simInput(prefix, words, suffix, ints, data_seed, template)
         sim_input.it = it
         sim_input.name_suffix = name_suffix
@@ -444,6 +524,7 @@ class rvMutator():
         return (sim_input, data)
 
     def update_phase(self, it):
+        #if it < 2 or self.no_guide:
         if it < self.corpus_size / 10 or self.no_guide:
             self.phase = GENERATION
         else:
@@ -454,7 +535,7 @@ class rvMutator():
                 self.phase = MUTATION
             else:
                 self.phase = MERGE
-
+                
     def add_corpus(self, sim_input):
         self.corpus.append(sim_input)
 

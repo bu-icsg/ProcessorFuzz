@@ -142,6 +142,7 @@ init_fregs:                 \
         csrr x2, mtval;     \
         sd x2, 264(x1);     \
         csrr x2, mip;       \
+#ifndef BP_EN			\
         andi x2, x2, -0x81;     \
         sd x2, 272(x1);     \
         csrr x2, pmpcfg0;       \
@@ -162,6 +163,7 @@ init_fregs:                 \
         sd x2, 360(x1);     \
         csrr x2, pmpaddr7;      \
         sd x2, 368(x1);     \
+#endif			\
         li a0, (MSTATUS_FS & (MSTATUS_FS >> 0));        \
         csrs mstatus, a0;       \
   fcsrs_dump:       \

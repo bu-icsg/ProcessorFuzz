@@ -144,7 +144,7 @@ class sigChecker():
             if not match and (val[0]==val[1]-1 or val[0]==val[1]+1):
                 match = True
                 xreg_match = True
-                print("Bug 5: Float rounding mode bug")
+                print("[BUGPREDICT] Rounding mode bug")
             self.debug_print('(f{:02} |{:>5}) [ISA] {:016x} || [RTL] {:016x}'. \
                              format(i, freg_names[i], val[0], val[1]), not match)
 
@@ -175,13 +175,10 @@ class sigChecker():
                       #check if setting 5th bit in ISA scause make them equal
                       match = True
                       csr_match = True
-                      print("Bug 3: [M/S]STATUS.FS bit is set to dirty by RTL when not needed")
-            if not match and csr_name in ['fflags']:
-                 if rtl_val == (isa_val-16):
-                      print("Bug 6: Invalid operation flag is not set after invalid fdiv instruction")
-            if csr_name in ['mtval', 'stval'] and rtl_val!=0 and isa_val==0: #CHATH: ignoring the mtval mismatch for Rocket for now
-                match = True
-                csr_match = True
+                      print("[BUGPREDICT] [M/S]STATUS.FS bit is set to dirty by RTL when not needed")
+            #if csr_name in ['mtval', 'stval'] and rtl_val==0 and isa_val!=0: #CHATH: ignoring the mtval mismatch for now
+            #    match = True
+            #    csr_match = True
             self.debug_print('({:>10}) [ISA] {:016x} || [RTL] {:016x}'. \
                              format(csr_name, isa_val, rtl_val), not match)
 

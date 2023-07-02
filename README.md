@@ -9,40 +9,45 @@ Download the docker image from this [link](https://drive.google.com/file/d/1fdq1
 ```
 docker load < processorfuzz_docker_img.tar
 ```
-### ProcessorFuzz Source
-ProcessorFuzz fuzzer source for Rocket and BOOM cores are in the main branch of this repo while the ProcessorFuzz source for fuzzing Black-Parrot processor in in the BP brnach. 
-
 
 ## Quick start
 
-For fuzzing Rocket core in the docker image, execute the start_fuzzing_rocket.sh script with the name (or number) of the batch and the number of iterations for the fuzzing session. 
+For fuzzing Blackparrot core, execute the start_fuzzing.sh script with the name (or number) of the batch and the number of iterations for the fuzzing session. 
 For example, to run a fuzzing session with the batch name "1" with 100 test iterations. 
 ```
-cd /root/processorfuzz/main/
-./start_fuzzing_rocket.sh 1 100
+cd /root/processorfuzz/BP
+./start_fuzzing.sh 1 100
 ```
-
-For fuzzing BOOM core in the docker image, execute the start_fuzzing_boom.sh script with the name (or number) of the batch and the number of iterations for the fuzzing session. 
-For example, to run a fuzzing session with the batch name "2" with 100 test iterations. 
-```
-cd /root/processorfuzz/main/
-./start_fuzzing_boom.sh 2 100
-```
-
-Take a look at the BP branch for the instructions on fuzzing Black-Parrot core. 
-
 ### Enabling FP_CSR and ALL_CSR configurations
 
 By default, ProcessorFuzz use the selected mode where transitions of a select set of CSRs are used as coverage.  
-You can enable FP_CSR or ALL_CSR configuration by editing the relevant start_fuzzing_*.sh script. 
+You can enable FP_CSR or ALL_CSR configuration by editing the start_fuzzing.sh script. 
 
+To enable selected (current mode in the script)  mode:
+```
+export SPIKE="/root/lowrisc/bin/spike"
+export FP_CSR=0
+export ALL_CSR=0
+export NO_ISA_GUIDE=0
+```
 To enable FP_CSR mode:
 ```
+export SPIKE="/root/lowrisc/bin/spike"
 export FP_CSR=1
 export ALL_CSR=0
+export NO_ISA_GUIDE=0
 ```
 To enable ALL_CSR mode:
 ```
+export SPIKE="/root/riscv-isa-sim-all-csr/build/bin/spike"
 export FP_CSR=0
 export ALL_CSR=1
+export NO_ISA_GUIDE=0
+```
+To enable random generator mode:
+```
+export SPIKE="/root/lowrisc/bin/spike"
+export FP_CSR=0
+export ALL_CSR=0
+export NO_ISA_GUIDE=1"
 ```

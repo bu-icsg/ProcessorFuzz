@@ -31,6 +31,9 @@ class Word():
         self.populated = populated
         self.ret_insts = []
 
+    def get_operands(self):
+        return self.operands
+    
     def pop_inst(self, inst, opvals):
         for (op, val) in opvals.items():
             inst = inst.replace(op, val)
@@ -85,7 +88,10 @@ class Word():
                     self.ret_insts[i] = inst
         else:
             return
-
+    
+    def get_label(self):
+        return self.label
+    
     def get_insts(self):
         assert self.populated, \
             'Word is not populated'
@@ -226,9 +232,10 @@ def word_sfence(opcode, syntax, xregs, fregs, imms, symbols):
 
 def word_fp(opcode, syntax, xregs, fregs, imms, symbols):
     tpe = NONE
-    rm = random.choice([ 'rne', 'rtz', 'rdn', 'rup', 'rmm', 'dyn'])
+    # rm = random.choice([ 'rne', 'rtz', 'rdn',
+    #                      'rup', 'rmm', 'dyn'])
     # Unset rounding mode testing
-    #rm = 'rne'
+    rm = 'rne'
 
     insts = [ syntax.format(rm) ]
 

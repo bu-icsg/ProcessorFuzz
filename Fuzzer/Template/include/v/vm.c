@@ -193,7 +193,6 @@ void handle_fault(uintptr_t addr, uintptr_t cause)
   flush_page(addr);
 
   __builtin___clear_cache(0,0);
-  //__riscv_flush_icache();
 }
 
 void handle_trap(trapframe_t* tf)

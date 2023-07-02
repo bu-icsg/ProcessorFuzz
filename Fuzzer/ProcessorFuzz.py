@@ -51,10 +51,6 @@ parser.add_option('debug', 0, 'Debugging?')
 parser.add_option('minimize', 0, 'Minimizing?')
 parser.add_option('prob_intr', 0, 'Probability of asserting interrupt')
 parser.add_option('no_guide', 0, 'Only random testing?')
-parser.add_option('run_elf', None, 'ELF file to run')
-parser.add_option('seed_dir', None, 'seed directory for running a specific set of seeds')
-parser.add_option('ALL_CSR', 0, 'Enable ALL_CSR configuration, Spike version must be set to ALL_CSR version for this to work')
-parser.add_option('FP_CSR', 0, 'Enable FP_CSR configuration')
 
 parser.print_help()
 parser.parse_option()
@@ -72,12 +68,6 @@ debug = parser.arg_map['debug'][0]
 
 if not os.path.isdir(out):
     os.makedirs(out)
-
-if not os.path.isdir(out + '/tests'):
-    os.makedirs(out + '/tests')
-
-if not os.path.isdir(out + '/trace'):
-    os.makedirs(out + '/trace')
 
 if not os.path.isdir(out + '/mismatch'):
     os.makedirs(out + '/mismatch')

@@ -103,10 +103,9 @@ f_instr = ['flw', 'fsw', 'fmadd.s', 'fmsub.s', 'fnmsub.s', 'fnmadd.s', 'fadd.s',
 d_instr = ['fld', 'fsd', 'fmadd.d', 'fmsub.d', 'fnmsub.d', 'fnmadd.d', 'fadd.d', 'fsub.d', 'fmul.d', 'fdiv.d', 'fsqrt.d', 'fsgnj.d', 'fsgnjn.d', 'fsgnjx.d', 'fmin.d', 'fmax.d', 'fcvt.s.d', 'fcvt.d.s', 'feq.d', 'flt.d', 'fle.d', 'fclass.d', 'fcvt.w.d', 'fcvt.wu.d', 'fcvt.d.w', 'fcvt.d.wu', 'fcvt.l.d', 'fcvt.lu.d', 'fmv.x.d', 'fcvt.d.l', 'fcvt.d.lu', 'fmv.d.x']
 
 #ignore_list = ['mret', 'csrw    mepc', 'csrwi   frm', 'csrwi   mscratch']
-ignore_list = ['csrw    minstret', 'mret', 'sret', 'ebreak', 'csrw    mepc', 'csrwi   mstatus', 'csrs    mstatus', 'csrs    medeleg', 'csrw    medeleg', 'csrw    mstatus', 'ecall', 'csrr    sp, mtval']
+ignore_list = ['csrw    minstret', 'mret', 'sret', 'ebreak', 'csrw    mepc', 'csrwi   mstatus', 'csrs    mstatus', 'csrs    medeleg', 'csrw    medeleg', 'csrw    mstatus', 'ecall']
 #ignore_list = []
-def get_FS(mstatus):
-    return ((int(mstatus, 16)>>13)&3)
+
 def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
 
     rtl_f = open(rtl_log, 'r')
@@ -126,13 +125,6 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
     isa_m_str = ''
     rtl_m_str = ''
     mode_isa = ''
-    lr_addr = 0
-    sc_addr = 0
-    wdata_p = 0
-    lrsc_exception = False
-    exception = False
-    initial = True
-    instr_str_p = ''
     for x in range(10):
         if 'DELAYED' in rtl_lines[x]: continue
         if toplevel=='BoomTile':
@@ -156,13 +148,6 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
          
         for j in range(len(isa_csv[isa_idx_offset:])): # skip the first line with headers
             line = isa_csv[isa_idx_offset+j]
-            #print(line)
-            #if ('ecall') in line:
-            #    print("[COMPARISON PASSED]")
-            #    isa_f.close()
-            #    break
-            #pc,instr,gpr,csr,binary,mode,instr_str,operand,pad
-            #print(line)
             pc_isa = line[0][8:]
             instr_isa = line[4]
             line[2] = line[2].split(';')[0]
@@ -185,22 +170,12 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
             scause_isa = scause_isa[-1]
             if mode_isa == '':
                 mode_isa = pmode_isa
-            #dcsr_isa = line[11].zfill(8)
             while "DELAYED" in rtl_lines[rtl_trace_start+j]: #skip all delayed values
                 rtl_trace_start = rtl_trace_start + 1
-            if instr_str_isa.split()[0] in ['lr.w', 'lr.d']:
-                lrsc_exception = False
-                lr_addr = int(wdata_p, 16)
+
             if "EXCEPTION" in rtl_lines[rtl_trace_start+j]:
-                exception = True
-                lrsc_exception = True
-                if toplevel=='RocketTile':
-                    if rtl_lines[rtl_trace_start+j].split()[2][4:]!=pc_isa:
-                        rtl_trace_start = rtl_trace_start + 1
-                #if rtl_lines[rtl_trace_start+j].split()[2][10:]!=pc_isa: #Only for BOOM for now
-                #    rtl_trace_start = rtl_trace_start + 1
-            else:
-                exception = False
+                if rtl_lines[rtl_trace_start+j].split()[2][10:]!=pc_isa: #Only for BOOM for now
+                    rtl_trace_start = rtl_trace_start + 1
 
             i = rtl_trace_start+j
             rtl_line = rtl_lines[i].split()
@@ -208,15 +183,17 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
                 pc_rtl = rtl_line[2][10:]
             elif toplevel=='RocketTile':
                 pc_rtl = rtl_line[2][4:]
-            #print("PC",pc_rtl, toplevel)
-            #pc_rtl = rtl_lines[rtl_trace_start+j].split()[2][10:]
-            #print("PC ISA: {}, RTL: {}".format(pc_isa, pc_rtl))
+            if pc_isa!=pc_rtl:
+                print("PC MISMATCH: ISA - {}, RTL - {}".format(pc_isa,pc_rtl))
+                isa_f.close()
+                return_val = -1
+                break
+
             instr_rtl = rtl_line[3][2:]
             wdata_rtl = rtl_line[4][2:]
             mode_rtl = rtl_line[1]
             if toplevel=='RocketTile':
                 mstatus_rtl = rtl_line[5]
-            #if toplevel=='BoomTile':
                 frm_rtl = frm_isa
                 fflags_rtl = fflags_isa
                 mcause_rtl = rtl_line[6][-1]
@@ -234,27 +211,18 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
                 mcounteren_rtl = rtl_line[11]
                 scounteren_rtl = rtl_line[12]
                 #dcsr_rtl = rtl_line[6]
-            if pc_isa!=pc_rtl:
-                print("PC MISMATCH: ISA - {}, RTL - {}".format(pc_isa,pc_rtl))
-                isa_f.close()
-                return_val = -1
-                if scause_rtl=='f' and mcause_isa=='6':
-                    print("Bug 14: Rocket exception priority is incorrect when store page fault and store misaligned address exceptions are generated")
-                break
-
             if instr_str_isa.split()[0] in ['j', 'ret']:
                 wdata_rtl = '0000000000000000'
-            if instr_str_isa.split()[0] in ['csrw', 'csrwi']:
+            if instr_str_isa.split()[0] in ['csrw']:
                 wdata_isa = '0000000000000000'
                 wdata_rtl = '0000000000000000'
-                #continue
-
             if 'csrr    sp, mip' in instr_str_isa.rstrip() and wdata_isa=='0000000000000080' and wdata_rtl=='0000000000000000':# Spike set mip to 0x80, we will skip this to match RTL
                 wdata_isa = wdata_rtl
             if instr_str_isa.rstrip() in ['jal     0x10', 'auipc   t6, 0x20'] and mstatus_isa == '8000000a00006000' and mstatus_rtl == '8000000a00007800':
                 mstatus_isa = mstatus_rtl
-            if exception and instr_isa == '00000000':
-                print("Bug 11: BOOM gives instr access fault on 0x000000 instr but spike gives illegal instr")
+            if strategy=='M5' and instr_rtl=='00000000': #PMP/cache issue
+                return_val = -2
+                break
             if 'deadbeef' in wdata_rtl:
                 reg = instr_str_isa.split()[1][:-1]
                 if reg[0] == 'f':
@@ -264,47 +232,17 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
                 #print(isa_wb_reg)
                 for k in range(i+1, rtl_trace_len):
                     if 'DELAYED' in rtl_lines[k]:
-                        #print(rtl_lines[k].split('=')[0].split()[1])
                         if (rtl_lines[k].split('=')[0].split()[1]==isa_wb_reg):
-                            wdata_rtl= rtl_lines[k].split('=')[1].split()[0].rstrip()
-                            #print("DELAYED result: ",wdata_rtl, rtl_lines[k].split('=')[0].split()[1])
+                            wdata_rtl= rtl_lines[k].split('=')[1].rstrip()
                             break
                     if k == rtl_trace_len-1: 
                         delayed_result_not_found = True
                         break
             if ( instr_isa!=instr_rtl or wdata_isa!=wdata_rtl or mode_isa!=mode_rtl or mstatus_isa!=mstatus_rtl or fflags_isa!=fflags_rtl or mcause_rtl!= mcause_isa or scause_rtl!=scause_isa or medeleg_rtl!=medeleg_isa or mcounteren_rtl!=mcounteren_isa or scounteren_rtl!=scounteren_isa):
                 mismatch = True
-                #if mstatus_isa=='0000000a00000000' and init_value: # Skip init value check
-                #    mismatch = False
-                #else:
-                #    init_value = False
-                #print(instr_rtl)
-                if instr_str_isa.split()[0] in ['sc.w', 'sc.d']:
-                     sc_addr = int(wdata_p, 16)
-                     if int(wdata_isa, 16) == 1 and int(wdata_rtl, 16) == 0:
-                          print("LRSC addr gap = ", abs(lr_addr-sc_addr))
-                          if lrsc_exception:
-                               print("Bug 7: Misaligned lr instruction on a cached line set the reservation")
-                     lrsc_exception = False
-                if get_FS(mstatus_isa) != get_FS(mstatus_rtl) and instr_str_p.split()[0] in ['csrw', 'csrwi']:
-                    if instr_str_p.split()[1].split(',')[0].strip() in ['mstatus', 'sstatus']:
-                        print("Bug 9: FS is not set to dirty when mstatus is written")
-                     
-                if int(fflags_isa,16) == int(fflags_rtl, 16) + 16:
-                     print("Bug 6: Invalid operation flag is not set after invalid fdiv instruction")
-                if mismatch and instr_str_isa.split()[0][0]=='f':
-                     if (int(instr_isa,16)>>12)&7 in [5,6]:
-                         print ("Bug 2: Invalid rm field does not raise exception")
-                     if (int(instr_isa,16)>>12)&7 in [7] and frm_isa=='7':
-                         print ("Bug 4: When frm is set DYN, floating point instruction with DYN rm field should raise exception")
                 if 'EXCEPTION' in rtl_line: #skipping privilege mismatch on exception
                      mismatch = False
                 if mismatch and wdata_isa!=wdata_rtl and instr_str_isa.split()[0] in f_instr + d_instr:
-                    #if wdata_isa[:8] == 'ffffffff' and wdata_rtl[:8] == '00000000' and wdata_isa[8:] == wdata_rtl[8:]:
-                    if (int(wdata_isa, 16) == int(wdata_rtl, 16) + 1) or (int(wdata_isa, 16) == int(wdata_rtl, 16) - 1):
-                        print ("Bug 5: Floating point rounding mode not working correctly")
-                    #    mismatch = False
-                    #if toplevel=='BoomTile':
                     if  instr_str_isa.split()[0] in f_instr: #consider as float
                         wdata_isa_f = struct.unpack('!f', binascii.unhexlify(wdata_isa[8:]))[0] #float.fromhex(wdata_isa)
                         wdata_rtl_f = struct.unpack('!f', binascii.unhexlify(wdata_rtl[8:]))[0] #float.fromhex(wdata_rtl)
@@ -321,16 +259,12 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
 
                 if instr_str_isa.split(',')[0] in ignore_list:
                     mismatch = False
-                elif instr_str_isa == 'csrr    sp, mtval': 
-                    mismatch = False
                 if mismatch and len(instr_str_isa.split(','))==3:
                     if instr_str_isa.split(',')[1].lstrip() in ['fcsr', 'medeleg', 'mstatus', 'mcause', 'fflags', 'scause', 'sstatus']:
                         mismatch = False
                 if 'zero' in instr_str_isa:
                     if instr_str_isa.split()[1].split(',')[0]=='zero':
                         mismatch = False
-                #if mismatch and (mode_isa!=mode_rtl or mstatus_isa!=mstatus_rtl or fflags_isa!=fflags_rtl):
-                #    print("INTERESTING")
                 if mismatch:
                     hdr = 'MISMATCH: {}\n\tPC\t\tINSTR\t\tMODE\tWDATA\t\t'.format(instr_str_isa)
                     isa_m_str = 'ISA:\t{}\t{}\t{}\t{}\t'.format(pc_isa,instr_isa,mode_isa,wdata_isa)
@@ -356,10 +290,6 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
                         isa_m_str = isa_m_str + '{}\t'.format(fflags_isa)
                         rtl_m_str = rtl_m_str + '{}\t'.format(fflags_rtl)
 
-                        #if mismatch and strategy=='M5':
-                        #    if instr_rtl=='00000000': #PMP cache issue
-                        #        return_val = -2
-                    #break
                 if i == rtl_trace_len-1: #search reached and of trace, instruction not found in RTL
                     not_found = True
                     #print(pc_isa, instr_isa, wdata_isa, mode_isa)
@@ -372,14 +302,12 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
                 break
             if mismatch:
                 #print("MISMATCH: {}\n\t\t\tPC\t\t\tINSTR\t\tMODE\tWDATA \nISA:\t\t{}\t{}\t{}\t\t{}\t\t{}\t\t{}\nRTL:\t\t{}\t{}\t{}\t\t{}\t\t{}\t\t{}".format(instr_str_isa,pc_isa,instr_isa,mode_isa,wdata_isa,mstatus_isa, fflags_isa, pc_rtl,instr_rtl,mode_rtl,wdata_rtl,mstatus_rtl, fflags_rtl))
-                if initial:
-                    print(hdr)
-                    print(isa_m_str)
-                    print(rtl_m_str)
-                    initial = False
+                print(hdr)
+                print(isa_m_str)
+                print(rtl_m_str)
                 #mismatch = False
                 return_val = -1
-                #break
+                break
             if not_found:
                 print("INSTRUCTION NOT FOUND: {}\n\t\t\tPC\t\t\tINSTR\t\tMODE\tWDATA \nISA:\t\t{}\t{}\t{}\t\t{}\n".format(instr_str_isa,pc_isa,instr_isa,mode_isa,wdata_isa))
                 isa_f.close()
@@ -387,18 +315,26 @@ def trace_compare(isa_csv, rtl_log, toplevel, strategy=''):
             if return_val==-2:
                 isa_f.close()
                 break
-            #if j==len(isa_csv[isa_idx_offset:])-1 and not mismatch and initial:
-            #    print("[COMPARISON PASSED]")
-            wdata_p = wdata_isa 
-            instr_str_p = instr_str_isa
+            if j==len(isa_csv[isa_idx_offset:])-1 and not mismatch:
+                print("[COMPARISON PASSED]") 
             #k = k + 1
     except:
         print("ERROR: Trace comparison did not complete")
     isa_f.close()
     return return_val
 
-def extract_transitions(i_file, out, it, ALL_CSR, FP_CSR):
+def extract_transitions(i_file, out, it, name):
 	fd = open(i_file, "r")
+	sym_file = out+"/tests/.input_" + name + ".symbols"
+	curr = os.environ['PWD']
+	elf_file = curr+"/" + out+"/tests/.input_" + name + ".elf"
+	fsym = open(sym_file,"r")
+	sym_init_lines = fsym.readlines()
+	sym_lines = {}	
+	for sym in sym_init_lines:
+		if sym.split()[1] == "t" or sym.split()[1] == "T":
+			sym_lines[sym.split()[0]] = sym
+	fsym.close()
 	fdb = open(out+"/transition.db","a")	
 	lines = fd.readlines()
 	fd.close()
@@ -416,17 +352,44 @@ def extract_transitions(i_file, out, it, ALL_CSR, FP_CSR):
 		count = count + 1
 		vals = l.split('[')[1].split(']')[0]
 		instr = l.split('[')[1].split(']')[1].rstrip()
-		vals = vals.split(',')
+		vals = vals.split(',')	
 		mstatus = vals[0]
 		frm = vals[1]
 		fflags = vals[2]
 		mcause = vals[3]
 		scause = vals[4]
-		medeleg =  vals[5] #Set this to zero for some experiments vals[5]
+		MEDELEG_MOD = os.environ['MEDELEG_MOD']
+		if MEDELEG_MOD == '0':
+			medeleg =  str(0)
+		elif MEDELEG_MOD == '1':
+			medeleg = vals[5]
+		elif MEDELEG_MOD == '2':
+			medeleg = vals[5]
+			medeleg_val = medeleg
+			medeleg_int = int(medeleg_val,16)
+			mcause_int = int(mcause,16)
+			temp = 1 << (mcause_int+1-1) #mask to get nth bit +1 bc of mcause start from 0
+			medeleg_of_mcause_set = temp & medeleg_int
+			is_multiple_medeleg_set = (medeleg_int & (medeleg_int -1)) != 0
+			if medeleg_int == 0:
+       				medeleg='00'
+			elif medeleg_of_mcause_set > 0 and is_multiple_medeleg_set:
+				medeleg='01'
+			elif medeleg_of_mcause_set > 0 and not is_multiple_medeleg_set:
+				medeleg='10'
+			elif medeleg_of_mcause_set == 0 and (medeleg_int > 0):
+				medeleg='11'
+			else:
+				print("Sth else?")
+				medeleg='00'
+		else:
+			print("Invalid MEDELEG MOD")
+
 		mcounteren = vals[6]
 		scounteren = vals[7]
-		#dcsr = vals[8]
-		if ALL_CSR:
+		ALL_CSR = os.environ['ALL_CSR']
+		FP_CSR = os.environ['FP_CSR']
+		if ALL_CSR == '1':
 			dcsr = vals[8]
 			misa = vals[9]
 			mhartid = vals[10]
@@ -460,12 +423,10 @@ def extract_transitions(i_file, out, it, ALL_CSR, FP_CSR):
 			vxrm = vals[38]
 			pmpcfg = vals[39]
 			pmpaddr = vals[40]
-		
 		pc = l.split()[2]
-
 		if init:
 			init = False
-		elif ALL_CSR:
+		elif ALL_CSR == '1':
 			if (mstatus_p != mstatus) or (frm_p != frm) or (fflags_p != fflags) or (mcause_p != mcause) or (scause_p != scause) or (medeleg_p != medeleg) or (mcounteren_p != mcounteren) or (scounteren_p != scounteren) or (dcsr_p != dcsr) or (misa_p != misa) or (mhartid_p != mhartid) or (mip_p != mip) or (mie_p != mie) or (mideleg_p != mideleg) or (mepc_p != mepc) or (mtval_p != mtval) or (mtvec_p != mtvec) or (mscratch_p != mscratch) or (sstatus_p != sstatus) or (sip_p != sip) or (sie_p != sie) or (sepc_p != sepc) or (stval_p != stval) or (sscratch_p != sscratch) or (satp_p != satp) or (stvec_p != stvec) or (dpc_p != dpc) or (tselect_p != tselect) or (tdata1_p != tdata1) or (tdata2_p != tdata2) or (tdata3_p != tdata3) or (mcountinhibit_p != mcountinhibit) or (cycle_p != cycle) or (instret_p != instret) or (mhpmevent_p != mhpmevent) or (mhpmcounter_p != mhpmcounter) or (vstart_p != vstart) or (vxsat_p != vxsat) or (vxrm_p != vxrm) or (pmpcfg_p != pmpcfg) or (pmpaddr_p != pmpaddr):
 				comp = mstatus+frm+fflags+mcause+scause+medeleg+mcounteren+scounteren+dcsr+misa+mhartid+mip+mie+mideleg+mepc+mtval+mtvec+mscratch+sstatus+sip+sie+sepc+stval+sscratch+satp+stvec+dpc+tselect+tdata1+tdata2+tdata3+mcountinhibit+cycle+instret+mhpmevent+mhpmcounter+vstart+vxsat+vxrm+pmpcfg+pmpaddr
 				comp_p = mstatus_p+frm_p+fflags_p+mcause_p+scause_p+medeleg_p+mcounteren_p+scounteren_p+dcsr_p+misa_p+mhartid_p+mip_p+mie_p+mideleg_p+mepc_p+mtval_p+mtvec_p+mscratch_p+sstatus_p+sip_p+sie_p+sepc_p+stval_p+sscratch_p+satp_p+stvec_p+dpc_p+tselect_p+tdata1_p+tdata2_p+tdata3_p+mcountinhibit_p+cycle_p+instret_p+mhpmevent_p+mhpmcounter_p+vstart_p+vxsat_p+vxrm_p+pmpcfg_p+pmpaddr_p
@@ -473,6 +434,7 @@ def extract_transitions(i_file, out, it, ALL_CSR, FP_CSR):
 				if (instr_t, comp_p, comp) not in comb_t:
 					comb_t.append((instr_t, comp_p, comp))
 					j += 1
+     
 		elif (mstatus_p != mstatus) or (frm_p != frm) or (fflags_p != fflags) or (mcause_p != mcause) or (scause_p != scause) or (medeleg_p != medeleg) or (mcounteren_p != mcounteren) or (scounteren_p != scounteren): #or (dcsr_p != dcsr):
 			t = (pc_p + '\t' + mstatus_p +','+frm_p+','+fflags_p+','+mcause_p+','+scause_p+','+medeleg_p+','+mcounteren_p+','+scounteren_p+' '+instr_p, pc + '\t' + mstatus +','+frm+','+fflags+','+mcause+','+scause+','+medeleg+','+mcounteren+','+scounteren+' '+instr)
 			comb = mstatus+frm+fflags+mcause+scause+medeleg+mcounteren+scounteren
@@ -502,45 +464,24 @@ def extract_transitions(i_file, out, it, ALL_CSR, FP_CSR):
 				for i in range(len(csr_l0)):
 					csr_n.append(csr_names[i]==csr) 
 					csr_l.append(csr_l0[i] != csr_l1[i])
-				#print(instr_p, csr_n, csr_l, file=fdb)
 				if sum(csr_l)==1 and csr_l==csr_n: 
 					#Criteria 2 - Skiiping the scenario of writing to a CSR and changing only that CSR
 					skip = True
 			priv_trns = False
 			func_trns = False
-			#if (instr_t, comb_p, comb) not in comb_t:
-			#	comb_t.append((instr_t, comb_p, comb))
-			#	transitions.append(t)
 			if not skip:
-				# Privileged CSR transition check - only considered when FP_CSR is not set
-				if (not FP_CSR) and (instr_t, comb_pr_p, comb_pr) not in comb_priv and comb_pr_p!=comb_pr:
-					comb_priv.append((instr_t, comb_pr_p, comb_pr))
-					priv_trns = True
-					print("PRIVILEGE",instr_t,file=fdb)
-					print(comb_pr_p,file=fdb)
-					print(comb_pr,file=fdb)
-					j += 1
-
-				# FP CSR transition check
+				if not (FP_CSR == '1'): #FP_only experiments do not check privilege CSRs
+					if (instr_t, comb_pr_p, comb_pr) not in comb_priv and comb_pr_p!=comb_pr:
+						comb_priv.append((instr_t, comb_pr_p, comb_pr))
+						priv_trns = True
+				else:
+					print("FP_CSR mode,ignore priv\n")
 				if (instr_t, comb_f_p, comb_f) not in comb_func and comb_f_p!=comb_f:
 					comb_func.append((instr_t, comb_f_p, comb_f))
 					func_trns = True
-					print("FLOAT",instr_t,file=fdb)
-					print(comb_f_p,file=fdb)
-					print(comb_f,file=fdb)
-					j += 1
-
 				if priv_trns or func_trns:
 					comb_t.append((instr_t, comb_p, comb))
-					transitions.append(t)
-
-			#j = j + 1
-		#	mstatus_p = mstatus
-		#	frm_p = frm
-		#	fflags_p = fflags
-		#	mcause_p = mcause
-		#	instr_p = instr
-	
+					transitions.append(t)			
 		mstatus_p = mstatus
 		frm_p = frm
 		fflags_p = fflags
@@ -549,10 +490,7 @@ def extract_transitions(i_file, out, it, ALL_CSR, FP_CSR):
 		medeleg_p = medeleg
 		mcounteren_p = mcounteren
 		scounteren_p = scounteren
-		#dcsr_p = dcsr
-		instr_p = instr
-		pc_p = pc
-		if ALL_CSR:
+		if ALL_CSR == '1':
 			dcsr_p = dcsr
 			misa_p = misa
 			mhartid_p = mhartid
@@ -586,21 +524,30 @@ def extract_transitions(i_file, out, it, ALL_CSR, FP_CSR):
 			vxrm_p = vxrm
 			pmpcfg_p = pmpcfg
 			pmpaddr_p = pmpaddr
-	
-	#j = 0
-	#print(duplic)
+		instr_p = instr
+		pc_p = pc
+	if not (ALL_CSR == '1'):
+		j = 0
 	print("test ",it, file=fdb)
-	#for p,c in transitions:
-	#	#if not duplic[j]:
-	#	print("###########################",file=fdb)
-	#	print(p, file=fdb)
-	#	print(c, file=fdb)
-	#	j = j + 1
+	mut_labels = []
+	for p,c in transitions:
+		#if not duplic[j]:
+		print("###########################",file=fdb)
+		print(p, file=fdb)
+		print(c, file=fdb)
+		sym_pc = None
+		for i in sorted (sym_lines.keys()):
+			if int(i,16) <= int(p.split()[0],16):
+				sym_pc = i
+			else:
+				if (sym_lines[sym_pc].split()[2][0:2] == "_l"):
+					mut_labels.append(sym_lines[sym_pc].split()[2])
+				break
+		j = j + 1
 	print("Number of transitions : ",j, file=fdb)
 	print("Instruction count     : ",count, file=fdb)
 	fdb.close()
-	return j
-	#print(comb_t)
+	return j, mut_labels
 
 def bp_timeout(proc):
     proc.kill
@@ -610,19 +557,18 @@ def check_mismatch_BP(error_list,elf_file):
     print("More analysis")
 
     print(''.join(map(str, error_list))) 
-   # print(elf_file)
     emu_pc = int('0x' + error_list[1].split(' ')[3][:-1], 16)
     emu_pc_str = error_list[1].split(' ')[3][12:-1] + ":"
     dut_pc = int('0x' + error_list[1].split(' ')[6][:-1], 16)
     dut_pc_str =  error_list[1].split(' ')[6][12:-1] + ":"
-    print(dut_pc_str)
     emu_inst = int('0x' + error_list[2].split(' ')[3][:-1], 16)
     n = 7
     bits = 1 << n
     opcode=emu_inst & (bits - 1) # keeps opcode
     is_FP_opcode = (opcode == 0b1001111) or (opcode == 0b1000011) or (opcode == 0b1010011) or (opcode == 0b1000111) or (opcode == 0b1001011)
     emu_satp = int('0x' + error_list[10].split(' ')[3][:-1],16)
-    fname = os.environ['PWD'] + "/" + "dump.txt"
+    out_path = os.environ['OUT']
+    fname = os.environ['PWD'] + "/" + out_path + "/" + "dump.txt"
     f = open(fname, "w")
     output = None
     output_dut = None
@@ -644,8 +590,8 @@ def check_mismatch_BP(error_list,elf_file):
     contains_div_rem = False
     contains_xval = False
     if emu_pc == dut_pc: 
-        if "fflags" in str(output) or "frm" in str(output):
-            print("Found fflags or frm!")
+        if "fflags" in str(output) or "frm" in str(output) or "fcsr" in str(output):
+            print("Found fflags or frm or fcsr!")
             contains_fflags = True
         elif "sepc" in str(output) or "mepc" in str(output):
             print("Found sepc or mepc")
@@ -679,7 +625,6 @@ def check_mismatch_BP(error_list,elf_file):
     except:
         print("No pending exception")
         dut_pending_exception = -1
-    #print(dut_pending_exception)
     match = True
     if emu_prev_priv == 2:
         print("Hypervisor mode not supported, ignore")
@@ -698,7 +643,7 @@ def check_mismatch_BP(error_list,elf_file):
         elif contains_hartid:
             print("Bug 6: Hartid is readonly bug!")
             match = False
-        elif emu_satp != 0x8000000000080003:
+        elif emu_satp > 0 and emu_satp != 0x8000000000080003:
             print("Mismatch due to satp is different?")
             print(hex(emu_satp)) 
             match = False
@@ -722,12 +667,12 @@ def check_mismatch_BP(error_list,elf_file):
             print("Bug 5: sepc or mepc LSB differs!")
             match = False
         elif contains_fflags:
-            print("Bug 3: FFlags hazard bug!")
+            print("Bug 3: FFlags, fcsr hazard bug!")
             match = False
         elif contains_xval and emu_wdata!=dut_wdata:
             print("Bug 8: stval/mtval mismatch")
             match = False
-        elif emu_satp != 0x8000000000080003:
+        elif emu_satp > 0 and emu_satp != 0x8000000000080003:
             print("Mismatch due to satp is different?")
             print(emu_satp) 
             match = False
@@ -741,30 +686,27 @@ def bp_run_test(BP_ROOT, test, it):
     out_env = os.environ['OUT']
     #Is this the first time?
     path = BP_ROOT+'/sdk/prog/{}'.format(out_env)
-    print(path)
     isExist = os.path.isdir(path) #is batchX created before?
     if not isExist:
         Path(BP_ROOT+'/sdk/prog/{}/'.format(out_env)).mkdir(parents=True, exist_ok=True)    
         Path(BP_ROOT+'/rtl/logs/{}/'.format(out_env)).mkdir(parents=True, exist_ok=True)
         Path(BP_ROOT+'/rtl/covmap/{}/'.format(out_env)).mkdir(parents=True, exist_ok=True)
-    print(test, it)
+    print(test)
     elf_file = BP_ROOT + '/sdk/prog/{}/test_{}.riscv'.format(out_env,it)
     shutil.copyfile(test, elf_file)
     cwd = os.getcwd()
-    print("HIIIII")
-    print(test)
     os.chdir(BP_ROOT + '/rtl')
     args = ['make', '-C', 'bp_top/syn', 'build.sc', 'sim.sc', 'COSIM_P=1','CMT_TRACE_P=1' , 'SUITE={}'.format(out_env), 'PROG=test_{}'.format(it), 'TAG={}'.format(out_env)]#, '|', 'grep', '-e', 'error', '-e', 'CRTLCOV']
     fd = open('logs/{}/run.{}.log'.format(out_env,it), 'w')
 
     if isExist:
         tout = 30
-        print("Exists")
+#        print("Exists")
     else : #for first time give more time since it builds stuff
         tout = 320 
     is_timeout = False
     try:
-        print("Start")
+#        print("Start")
         p = subprocess.Popen(args, stdout=fd, stderr=fd, start_new_session=True)
         p.wait(timeout=tout)
         stdout, stderr = p.communicate()
@@ -775,7 +717,6 @@ def bp_run_test(BP_ROOT, test, it):
         print(f'Timeout {tout}s expired', file=sys.stderr)
         os.killpg(os.getpgid(p.pid), signal.SIGTERM)
         p.wait()
-    
     print(sys.exc_info()[0])
     if is_timeout:
         os.chdir(cwd)
@@ -833,8 +774,8 @@ def isa_timeout(out, stop, proc_num, it):
     if not os.path.isdir(out + '/isa_timeout'):
         os.makedirs(out + '/isa_timeout')
 
-    #shutil.copy(out + '/tests/.input_{}.elf'.format(it), out + '/isa_timeout/timeout_{}.elf'.format(it))
-    #shutil.copy(out + '/tests/.input_{}.S'.format(it), out + '/isa_timeout/timeout_{}.S'.format(it))
+    shutil.copy(out + '/tests/.input_{}.elf'.format(it), out + '/isa_timeout/timeout_{}.elf'.format(it))
+    shutil.copy(out + '/tests/.input_{}.S'.format(it), out + '/isa_timeout/timeout_{}.S'.format(it))
 
     ps = psutil.Process()
     children = ps.children(recursive=True)
