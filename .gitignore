@@ -1,0 +1,9 @@
+__pycache__
+.ccls-cache
+build*
+.*.swp
+*~
+*out
+elf2hex
+*.log
+penv

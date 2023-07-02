@@ -1,0 +1,9 @@
+[submodule "spike/riscv-isa-sim"]
+	path = spike/riscv-isa-sim
+	url = https://github.com/sammy17/riscv-isa-sim.git
+[submodule "spike/riscv-isa-sim-all-csr"]
+	path = spike/riscv-isa-sim-all-csr
+	url = https://github.com/sammy17/riscv-isa-sim-all-csr.git
+[submodule "Benchmarks/Verilog/black-parrot-sim"]
+	path = Benchmarks/Verilog/black-parrot-sim
+	url = https://github.com/black-parrot/black-parrot-sim.git
