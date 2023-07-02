@@ -10,7 +10,7 @@ Download the docker image from this [link](https://drive.google.com/file/d/1fdq1
 docker load < processorfuzz_docker_img.tar
 ```
 ### ProcessorFuzz Source
-ProcessorFuzz fuzzer source for Rocket and BOOM cores are in the main brnach of this repo while the ProcessorFuzz source for fuzzing Black-Parrot processor in in the BP brnach. 
+ProcessorFuzz fuzzer source for Rocket and BOOM cores are in the main branch of this repo while the ProcessorFuzz source for fuzzing Black-Parrot processor in in the BP brnach. 
 
 
 ## Quick start
