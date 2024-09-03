@@ -5,7 +5,7 @@ ProcessorFuzz is a processor fuzzer tool that identifies "interesting" assembly-
 
 ## Setup
 ProcessorFuzz uses many other projects including spike, dromajo, rocket, boom, blackparrot. To prevent setup issues, we generated a docker image and tested that image on ubuntu 18.04.
-Download the docker image from this [link](https://drive.google.com/file/d/1fdq18U2CvbaV9QxFMjuFxF5nmL9CrBxj/view?usp=sharing) and execute the following command on ubuntu machine that has docker.
+Download the docker image from this [link](https://hub.docker.com/repository/docker/chath/processorfuzz/general) from Docker Hub and execute the following command on ubuntu machine that has docker.
 ```
 docker load < processorfuzz_docker_img.tar
 ```
